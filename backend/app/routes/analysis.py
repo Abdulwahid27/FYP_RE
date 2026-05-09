@@ -1,14 +1,11 @@
 import asyncio
-import uuid
-from pathlib import Path
 
-import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..database import get_db
-from ..models import UserSession
+from ..deps import get_current_user
+from ..models import User, UserSession
 from ..schemas import AnalyzeOut
 from ..services.openrouter import analyze_portrait, StyleAnalysisError
 
@@ -24,24 +21,19 @@ async def analyze(
     request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only JPEG/PNG/WEBP images are allowed")
 
-    suffix = Path(file.filename or "portrait").suffix.lower() or ".jpg"
-    if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
-        suffix = ".jpg"
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
 
-    filename = f"{uuid.uuid4().hex}{suffix}"
-    save_path = settings.ORIGINALS_DIR / filename
-
-    async with aiofiles.open(save_path, "wb") as f:
-        content = await file.read()
-        await f.write(content)
+    mime = (file.content_type or "image/jpeg").split(";")[0].strip().lower()
 
     # Cancel the upstream LLM call as soon as the client disconnects (Stop button / tab close).
-    # This prevents wasted retries against the OpenRouter free-tier quota.
-    analyze_task = asyncio.create_task(analyze_portrait(save_path))
+    analyze_task = asyncio.create_task(analyze_portrait((mime, content)))
 
     async def _watch_disconnect() -> None:
         while not analyze_task.done():
@@ -69,7 +61,9 @@ async def analyze(
     face_shape = (parsed or {}).get("face_shape")
 
     session = UserSession(
-        portrait_path=str(save_path.relative_to(settings.UPLOAD_DIR.parent)),
+        user_id=current_user.id,
+        portrait_data=content,
+        portrait_mime=mime,
         skin_tone=skin_tone,
         face_shape=face_shape,
         analysis_raw={"parsed": parsed, "model_response_keys": list(raw.keys()) if isinstance(raw, dict) else []},
@@ -78,8 +72,8 @@ async def analyze(
     db.commit()
     db.refresh(session)
 
-    base = str(request.base_url).rstrip("/")
-    portrait_url = f"{base}/uploads/originals/{filename}"
+    # Relative path: SPA loads via Vite proxy or prefixes VITE_API_BASE in fetch/img helpers.
+    portrait_url = f"/api/sessions/{session.id}/portrait"
 
     return AnalyzeOut(
         session_id=session.id,

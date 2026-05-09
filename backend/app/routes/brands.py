@@ -7,9 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Brand, Garment, Gender, Occasion
+from ..models import Brand, Garment, Gender, Event, Style
 from ..schemas import BrandOut, GarmentOut
 from ..services.brand_scrape import USER_AGENT
+from ..services.catalog_filters import passes_feels_like_filter
 
 
 router = APIRouter(prefix="/api", tags=["catalog"])
@@ -23,21 +24,40 @@ def list_brands(db: Session = Depends(get_db)):
 @router.get("/garments", response_model=list[GarmentOut])
 def list_garments(
     gender: str = Query(...),
-    occasion: str = Query(...),
-    brand_id: int | None = Query(None),
+    event: str = Query(...),
+    style: str = Query(...),
+    feels_like_c: float | None = Query(
+        None,
+        description="OpenWeather 'feels like' °C — when warm, hides obvious winter knitwear.",
+    ),
     db: Session = Depends(get_db),
 ):
     try:
         g = Gender(gender)
-        o = Occasion(occasion)
+        e = Event(event)
+        s = Style(style)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid gender or occasion")
+        raise HTTPException(status_code=400, detail="Invalid gender, event, or style")
 
-    stmt = select(Garment).where(Garment.gender == g, Garment.occasion == o)
-    if brand_id is not None:
-        stmt = stmt.where(Garment.brand_id == brand_id)
+    stmt = select(Garment).where(
+        Garment.gender == g,
+        Garment.event == e,
+        Garment.style == s,
+    )
 
-    return db.execute(stmt.order_by(Garment.id.desc())).scalars().all()
+    rows = db.execute(stmt.order_by(Garment.id.desc())).scalars().all()
+    if feels_like_c is None:
+        return rows
+    return [
+        g
+        for g in rows
+        if passes_feels_like_filter(
+            title=g.title,
+            product_type=g.product_type,
+            tags=g.tags,
+            feels_like_c=feels_like_c,
+        )
+    ]
 
 
 @router.get("/garments/{garment_id}/image", response_class=Response)
@@ -77,6 +97,21 @@ async def garment_image_proxy(garment_id: int, db: Session = Depends(get_db)):
         media_type=content_type,
         headers={"Cache-Control": "public, max-age=3600"},
     )
+
+
+@router.get("/garments/{garment_id}/extracted")
+def garment_extracted_cutout(garment_id: int, db: Session = Depends(get_db)):
+    """Background-removed garment PNG from DB (populated after first try-on or extraction)."""
+    g = db.get(Garment, garment_id)
+    if not g:
+        raise HTTPException(status_code=404, detail="Garment not found")
+    if g.extracted_data is not None:
+        return Response(
+            content=g.extracted_data,
+            media_type=g.extracted_mime or "image/png",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+    raise HTTPException(status_code=404, detail="Garment cut-out not available yet")
 
 
 @router.get("/garments/{garment_id}", response_model=GarmentOut)

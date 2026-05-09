@@ -1,5 +1,5 @@
-from datetime import datetime
-from sqlalchemy import String, Integer, ForeignKey, DateTime, Text, JSON, Enum
+from datetime import date, datetime
+from sqlalchemy import String, ForeignKey, DateTime, Date, Text, JSON, Enum, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -12,10 +12,45 @@ class Gender(str, enum.Enum):
 
 
 class Occasion(str, enum.Enum):
-    wedding = "wedding"
-    casual = "casual"
-    office = "office"
-    party = "party"
+    social = "social"
+    traditional = "traditional"
+
+
+class Event(str, enum.Enum):
+    office_wear = "office_wear"
+    hangouts = "hangouts"
+    religious = "religious"
+    family_gatherings = "family_gatherings"
+
+
+class Style(str, enum.Enum):
+    eastern = "eastern"
+    western = "western"
+
+
+# Each event belongs to exactly one occasion. Used for validation + UI cascade.
+EVENT_OCCASION: dict[Event, Occasion] = {
+    Event.office_wear: Occasion.social,
+    Event.hangouts: Occasion.social,
+    Event.religious: Occasion.traditional,
+    Event.family_gatherings: Occasion.traditional,
+}
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    full_name: Mapped[str] = mapped_column(String(200), default="")
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    sessions: Mapped[list["UserSession"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class Brand(Base):
@@ -38,11 +73,16 @@ class Garment(Base):
     brand_id: Mapped[int] = mapped_column(ForeignKey("brands.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     gender: Mapped[Gender] = mapped_column(Enum(Gender, name="gender_enum"), index=True)
-    occasion: Mapped[Occasion] = mapped_column(Enum(Occasion, name="occasion_enum"), index=True)
+    event: Mapped[Event] = mapped_column(Enum(Event, name="event_enum"), index=True)
+    style: Mapped[Style] = mapped_column(Enum(Style, name="style_enum"), index=True)
     image_url: Mapped[str] = mapped_column(String(700))
+    product_url: Mapped[str | None] = mapped_column(String(700), nullable=True)
+    product_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    tags: Mapped[str | None] = mapped_column(String(800), nullable=True)
     price: Mapped[str | None] = mapped_column(String(60), nullable=True)
     color: Mapped[str | None] = mapped_column(String(60), nullable=True)
-    extracted_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    extracted_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    extracted_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     brand: Mapped[Brand] = relationship(back_populates="garments")
 
@@ -53,7 +93,11 @@ class UserSession(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
-    portrait_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
+    user: Mapped["User | None"] = relationship(back_populates="sessions")
+
+    portrait_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    portrait_mime: Mapped[str | None] = mapped_column(String(128), nullable=True)
     skin_tone: Mapped[str | None] = mapped_column(String(80), nullable=True)
     face_shape: Mapped[str | None] = mapped_column(String(80), nullable=True)
     analysis_raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -62,7 +106,9 @@ class UserSession(Base):
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     weather: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     occasion: Mapped[Occasion | None] = mapped_column(Enum(Occasion, name="occasion_enum"), nullable=True)
-    brand_id: Mapped[int | None] = mapped_column(ForeignKey("brands.id", ondelete="SET NULL"), nullable=True)
+    event: Mapped[Event | None] = mapped_column(Enum(Event, name="event_enum"), nullable=True)
+    style: Mapped[Style | None] = mapped_column(Enum(Style, name="style_enum"), nullable=True)
 
     selected_garment_id: Mapped[int | None] = mapped_column(ForeignKey("garments.id", ondelete="SET NULL"), nullable=True)
-    tryon_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    tryon_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    tryon_mime: Mapped[str | None] = mapped_column(String(128), nullable=True)

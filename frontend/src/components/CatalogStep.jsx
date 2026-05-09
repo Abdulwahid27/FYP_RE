@@ -5,26 +5,34 @@ export function garmentImageSrc(g) {
   return `/api/garments/${g.id}/image`;
 }
 
+const EVENT_LABELS = {
+  office_wear: "Office wear",
+  hangouts: "Hangouts",
+  religious: "Religious",
+  family_gatherings: "Family gatherings",
+};
+
 export default function CatalogStep({ context, brands, onPick, onBack }) {
   const [garments, setGarments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeBrandId, setActiveBrandId] = useState(context.brandId || null);
 
   useEffect(() => {
     setLoading(true);
+    const feels = context.weather?.feels_like_c;
     api
       .garments({
         gender: context.gender,
-        occasion: context.occasion,
-        brandId: activeBrandId,
+        event: context.event,
+        style: context.style,
+        feels_like_c: feels != null ? feels : undefined,
       })
       .then((g) => setGarments(g))
       .catch(() => setGarments([]))
       .finally(() => setLoading(false));
-  }, [context.gender, context.occasion, activeBrandId]);
+  }, [context.gender, context.event, context.style, context.weather?.feels_like_c]);
 
   const brandsById = useMemo(
-    () => Object.fromEntries(brands.map((b) => [b.id, b])),
+    () => Object.fromEntries((brands || []).map((b) => [b.id, b])),
     [brands]
   );
 
@@ -36,36 +44,10 @@ export default function CatalogStep({ context, brands, onPick, onBack }) {
           <h2 className="font-display text-3xl mt-1">Curated for you</h2>
           <p className="text-ink-500 text-sm mt-1">
             <span className="capitalize">{context.gender}</span> ·{" "}
-            <span className="capitalize">{context.occasion}</span>
+            <span>{EVENT_LABELS[context.event] || context.event}</span> ·{" "}
+            <span className="capitalize">{context.style}</span>
             {context.city && <> · {context.city}</>}
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className={[
-              "chip",
-              !activeBrandId
-                ? "border-ink-900 bg-ink-900 text-white"
-                : "border-ink-200 bg-white text-ink-700 hover:border-ink-400",
-            ].join(" ")}
-            onClick={() => setActiveBrandId(null)}
-          >
-            All brands
-          </button>
-          {brands.map((b) => (
-            <button
-              key={b.id}
-              className={[
-                "chip",
-                activeBrandId === b.id
-                  ? "border-ink-900 bg-ink-900 text-white"
-                  : "border-ink-200 bg-white text-ink-700 hover:border-ink-400",
-              ].join(" ")}
-              onClick={() => setActiveBrandId(b.id)}
-            >
-              {b.name}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -85,7 +67,7 @@ export default function CatalogStep({ context, brands, onPick, onBack }) {
         <div className="card p-10 text-center text-ink-500">
           <p className="font-display text-xl">No looks found yet</p>
           <p className="text-sm mt-1">
-            Try a different brand or occasion to see more.
+            Try a different event or style to see more.
           </p>
         </div>
       ) : (
@@ -124,6 +106,17 @@ export default function CatalogStep({ context, brands, onPick, onBack }) {
                 >
                   Try this on
                 </button>
+                {g.product_url && (
+                  <a
+                    href={g.product_url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-2 block text-center text-[11px] text-ink-500 hover:text-ink-900 underline underline-offset-2"
+                  >
+                    View on brand site ↗
+                  </a>
+                )}
               </div>
             </article>
           ))}

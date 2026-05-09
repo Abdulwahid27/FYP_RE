@@ -20,9 +20,9 @@ export default function Stepper({ current }) {
             <div
               className={[
                 "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold border transition",
-                done && "bg-ink-900 text-white border-ink-900",
-                active && "bg-accent-500 text-white border-accent-500 shadow-glow",
-                !done && !active && "bg-white text-ink-400 border-ink-200",
+                done && "bg-[#1a1510] text-[#f5f0e8] border-[#c9a25c]/40",
+                active && "bg-gradient-to-br from-[#c9a25c] to-[#8b6914] text-[#1a120c] border-[#c9a25c] shadow-lg",
+                !done && !active && "bg-white/10 text-[#a89b8c] border-white/15",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -32,13 +32,13 @@ export default function Stepper({ current }) {
             <span
               className={[
                 "text-sm font-medium",
-                active ? "text-ink-900" : "text-ink-500",
+                active ? "text-[#faf6ef]" : "text-[#a89b8c]",
               ].join(" ")}
             >
               {s.label}
             </span>
             {i < STEPS.length - 1 && (
-              <span className="hidden sm:block w-8 h-px bg-ink-200" />
+              <span className="hidden sm:block w-8 h-px bg-white/15" />
             )}
           </li>
         );

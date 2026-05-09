@@ -48,6 +48,29 @@ def _encode_image_to_data_url(image_path: Path) -> str:
     return f"data:image/{mime};base64,{base64.b64encode(b).decode('utf-8')}"
 
 
+def _subtype_from_content_type(content_type: str) -> str:
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct in ("image/jpeg", "image/jpg"):
+        return "jpeg"
+    if ct == "image/png":
+        return "png"
+    if ct == "image/webp":
+        return "webp"
+    return "png"
+
+
+def _encode_bytes_to_data_url(content_type: str, raw: bytes) -> str:
+    sub = _subtype_from_content_type(content_type)
+    return f"data:image/{sub};base64,{base64.b64encode(raw).decode('utf-8')}"
+
+
+def _portrait_to_data_url(image: Path | tuple[str, bytes]) -> str:
+    if isinstance(image, Path):
+        return _encode_image_to_data_url(image)
+    mime, raw = image
+    return _encode_bytes_to_data_url(mime, raw)
+
+
 def _extract_json(text: str) -> dict[str, Any] | None:
     if not text:
         return None
@@ -62,6 +85,19 @@ def _extract_json(text: str) -> dict[str, Any] | None:
         return json.loads(candidate)
     except json.JSONDecodeError:
         return None
+
+
+def _openrouter_error_body(resp: httpx.Response) -> str:
+    try:
+        data = resp.json()
+        err = data.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])[:400]
+        if isinstance(err, str):
+            return err[:400]
+    except Exception:
+        pass
+    return (resp.text or "")[:400]
 
 
 async def _post_chat(
@@ -92,7 +128,7 @@ async def _post_chat(
     )
 
 
-async def analyze_portrait(image_path: Path) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+async def analyze_portrait(image: Path | tuple[str, bytes]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """Send the portrait to the configured model and return (parsed_json, raw_response).
 
     Behaviour:
@@ -103,22 +139,34 @@ async def analyze_portrait(image_path: Path) -> tuple[dict[str, Any] | None, dic
       - On final failure, raise StyleAnalysisError with a user-safe message.
     """
     if not settings.OPEN_ROUTER_API_KEY:
-        raise StyleAnalysisError("Style analysis is temporarily unavailable.")
+        raise StyleAnalysisError(
+            "No OpenRouter API key is configured. Add OPEN_ROUTER_API_KEY to the backend .env file and restart the server."
+        )
 
     model = (settings.OPENROUTER_MODEL or "").strip()
     if not model:
         raise StyleAnalysisError("Style analysis is temporarily unavailable.")
 
-    data_url = _encode_image_to_data_url(image_path)
+    data_url = _portrait_to_data_url(image)
 
     headers = {
         "Authorization": f"Bearer {settings.OPEN_ROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5173",
-        "X-Title": "Atelier",
+        "HTTP-Referer": settings.OPENROUTER_HTTP_REFERER,
+        "X-Title": settings.OPENROUTER_APP_TITLE,
     }
 
-    async with _request_lock, httpx.AsyncClient(timeout=120) as client:
+    # First arg = default for read/write/pool; connect gets its own budget (httpx.Timeout rules).
+    timeout = httpx.Timeout(
+        settings.OPENROUTER_READ_TIMEOUT,
+        connect=settings.OPENROUTER_CONNECT_TIMEOUT,
+    )
+    async with _request_lock, httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        trust_env=True,
+        http2=False,
+    ) as client:
         attempt = 0
         max_attempts = 1 + len(RETRY_BACKOFF_SECONDS)
         last_status: int | None = None
@@ -127,30 +175,41 @@ async def analyze_portrait(image_path: Path) -> tuple[dict[str, Any] | None, dic
         while attempt < max_attempts:
             try:
                 resp = await _post_chat(client, model, data_url, headers)
+            except httpx.ConnectTimeout as e:
+                logger.warning("OpenRouter connect timeout: %r", e)
+                raise StyleAnalysisError(
+                    "Connecting to OpenRouter timed out. Check your network or VPN, try again, "
+                    "or set HTTP_PROXY/HTTPS_PROXY in the environment if you browse through a proxy."
+                ) from e
+            except httpx.ReadTimeout as e:
+                logger.warning("OpenRouter read timeout: %r", e)
+                raise StyleAnalysisError(
+                    "OpenRouter took too long to answer. Try again in a moment, or use a smaller portrait image."
+                ) from e
+            except httpx.ConnectError as e:
+                logger.warning("OpenRouter connect error: %r", e)
+                raise StyleAnalysisError(
+                    "Could not reach OpenRouter (connection failed). Confirm you have internet access, "
+                    "that https://openrouter.ai is not blocked by firewall or DNS, and restart the API. "
+                    "If you use a corporate proxy, configure HTTP_PROXY/HTTPS_PROXY for the backend process."
+                ) from e
             except httpx.RequestError as e:
-                # Log full context so "couldn't reach" in logs is diagnosable (DNS vs timeout vs SSL).
                 logger.warning("Network error calling style provider: %r", e)
-                msg = "Couldn't reach the style service. Check your connection and retry."
+                msg = (
+                    "Could not reach the style service over the network. Check your connection, DNS, "
+                    "and try again. If the problem persists, verify the machine running the API can open "
+                    "https://openrouter.ai in a browser or with curl."
+                )
                 errn = getattr(e, "__context__", None) or e
                 errn = getattr(errn, "errno", None)
-                if errn == -3:  # socket.EAI_AGAIN: DNS / transient name resolution failure
+                if errn == -3:
                     msg = (
-                        "The style service couldn't be reached (network or DNS). "
-                        "Check internet access, or restart the app from a normal terminal if you're developing locally."
+                        "DNS lookup failed for the style service. Check internet access or try again; "
+                        "on some networks you may need to change DNS (e.g. 8.8.8.8) or disable VPN briefly."
                     )
-                raise StyleAnalysisError(msg)
+                raise StyleAnalysisError(msg) from e
 
             last_status = resp.status_code
-
-            if resp.status_code != 200:
-                body_preview = resp.text[:600] if resp.text else "<empty body>"
-                logger.error(
-                    "Style provider HTTP %s | model=%s | attempt=%d | body=%s",
-                    resp.status_code,
-                    model,
-                    attempt + 1,
-                    body_preview,
-                )
 
             if resp.status_code == 200:
                 try:
@@ -195,9 +254,27 @@ async def analyze_portrait(image_path: Path) -> tuple[dict[str, Any] | None, dic
                 attempt += 1
                 continue
 
-            # Non-429 error — don't keep retrying, fail clearly.
-            logger.warning("Style provider returned %s", resp.status_code)
-            break
+            detail = _openrouter_error_body(resp)
+            logger.error(
+                "Style provider HTTP %s | model=%s | attempt=%d | body=%s",
+                resp.status_code,
+                model,
+                attempt + 1,
+                detail[:600] if detail else "<empty>",
+            )
+            if resp.status_code == 401:
+                raise StyleAnalysisError(
+                    "OpenRouter rejected this API key. Confirm OPEN_ROUTER_API_KEY in your .env "
+                    "matches the secret key in your OpenRouter dashboard."
+                )
+            if resp.status_code in (400, 404):
+                raise StyleAnalysisError(
+                    "The vision model request failed — check OPENROUTER_MODEL in .env (it must be a "
+                    f"valid model id for your account). Details: {detail or 'see server logs.'}"
+                )
+            raise StyleAnalysisError(
+                f"The style service returned HTTP {resp.status_code}. {detail or 'Please try again shortly.'}"
+            )
 
     if last_status == 429:
         raise StyleAnalysisError(

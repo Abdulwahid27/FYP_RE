@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 import { garmentImageSrc } from "./CatalogStep.jsx";
+import AuthenticatedImage from "./AuthenticatedImage.jsx";
 
 const STAGES = [
   "Reading your photo",
@@ -67,7 +68,7 @@ export default function TryOnStep({ analysis, garment, onDone, onBack }) {
         </p>
 
         <div className="mt-6 grid grid-cols-2 gap-4">
-          <Preview label="Your portrait" src={analysis.portrait_url} />
+          <Preview label="Your portrait" portraitPath={analysis.portrait_url} />
           <Preview label="Selected look" src={garmentImageSrc(garment)} />
         </div>
 
@@ -136,12 +137,20 @@ export default function TryOnStep({ analysis, garment, onDone, onBack }) {
   );
 }
 
-function Preview({ label, src }) {
+function Preview({ label, src, portraitPath }) {
   return (
     <div>
       <p className="field-label">{label}</p>
       <div className="mt-2 aspect-[3/4] rounded-xl overflow-hidden bg-ink-50 border border-ink-100">
-        <img src={src} alt={label} className="w-full h-full object-cover" />
+        {portraitPath ? (
+          <AuthenticatedImage
+            src={portraitPath}
+            alt={label}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <img src={src} alt={label} className="w-full h-full object-cover" />
+        )}
       </div>
     </div>
   );
