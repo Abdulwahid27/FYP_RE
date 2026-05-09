@@ -101,6 +101,30 @@ body {
   box-shadow: 0 0 0 2px rgba(201, 162, 92, 0.22);
 }
 
+/* Native selects: OS defaults often ignore dark cards — align with studio theme */
+.luxury-app select.input {
+  color-scheme: dark;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 2.75rem;
+  padding-right: 2.5rem;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23c9a25c' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 1.15rem;
+}
+
+.luxury-app select.input:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background-color: rgba(0, 0, 0, 0.38);
+}
+
+.luxury-app select.input option {
+  background-color: #141110;
+  color: #f3ede3;
+}
+
 .luxury-app .text-ink-500 {
   color: #a89b8c;
 }

@@ -7,6 +7,8 @@ import TryOnStep from "./components/TryOnStep.jsx";
 import ResultStep from "./components/ResultStep.jsx";
 import AuthStep from "./components/AuthStep.jsx";
 import HomePage from "./components/HomePage.jsx";
+import AboutPage from "./components/AboutPage.jsx";
+import HowItWorksPage from "./components/HowItWorksPage.jsx";
 import LuxuryBackdrop from "./components/LuxuryBackdrop.jsx";
 import { api, getToken, setToken as persistToken } from "./api.js";
 
@@ -16,6 +18,8 @@ export default function App() {
   const [token, setToken] = useState(() => getToken());
   /** When logged out: show landing first, then auth after "Enter the studio". */
   const [preAuthScreen, setPreAuthScreen] = useState("landing");
+  /** Marketing sub-pages while logged out on landing flow (no router dependency). */
+  const [publicView, setPublicView] = useState("home");
   const [userLabel, setUserLabel] = useState(null);
   const [step, setStep] = useState("upload");
   const [analysis, setAnalysis] = useState(null);
@@ -43,6 +47,7 @@ export default function App() {
           persistToken(null);
           setToken(null);
           setPreAuthScreen("landing");
+          setPublicView("home");
         }
         localStorage.setItem(key, boot);
       })
@@ -88,16 +93,32 @@ export default function App() {
     persistToken(null);
     setToken(null);
     setPreAuthScreen("landing");
+    setPublicView("home");
     reset();
   }
 
   if (!token) {
     if (preAuthScreen === "landing") {
-      return <HomePage onEnterStudio={() => setPreAuthScreen("auth")} />;
+      if (publicView === "about") {
+        return <AboutPage onHome={() => setPublicView("home")} />;
+      }
+      if (publicView === "how") {
+        return <HowItWorksPage onHome={() => setPublicView("home")} />;
+      }
+      return (
+        <HomePage
+          onEnterStudio={() => setPreAuthScreen("auth")}
+          onNavigateAbout={() => setPublicView("about")}
+          onNavigateHow={() => setPublicView("how")}
+        />
+      );
     }
     return (
       <AuthStep
-        onBackHome={() => setPreAuthScreen("landing")}
+        onBackHome={() => {
+          setPreAuthScreen("landing");
+          setPublicView("home");
+        }}
         onAuthed={(t) => {
           persistToken(t);
           setToken(t);
