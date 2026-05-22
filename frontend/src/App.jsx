@@ -190,6 +190,7 @@ export default function App() {
 
         {step === "catalog" && analysis && context && (
           <CatalogStep
+            analysis={analysis}
             context={context}
             brands={brands}
             onBack={() => setStep("context")}
@@ -214,7 +215,11 @@ export default function App() {
             result={result}
             garment={garment}
             onRestart={reset}
-            onPickAnother={() => setStep("catalog")}
+            onPickAnother={() => {
+              setResult(null);
+              setGarment(null);
+              setStep("catalog");
+            }}
           />
         )}
       </main>

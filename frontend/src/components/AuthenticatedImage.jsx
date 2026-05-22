@@ -18,7 +18,10 @@ export default function AuthenticatedImage({ src, alt, className }) {
     let objectUrl;
     (async () => {
       try {
-        const res = await fetch(absoluteFetchUrl(src), { headers: { ...authHeaders() } });
+        const res = await fetch(absoluteFetchUrl(src), {
+          headers: { ...authHeaders() },
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error("unauthorized or missing");
         const blob = await res.blob();
         if (cancelled) return;

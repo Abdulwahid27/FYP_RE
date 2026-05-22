@@ -4,9 +4,12 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from ..models import Garment, UserSession
 
 from ..config import settings
 
@@ -30,6 +33,7 @@ USER_PROMPT = (
 
 # Single in-flight request guard — never hit the upstream more than once at a time.
 _request_lock = asyncio.Lock()
+_recommend_lock = asyncio.Lock()
 
 # Backoff (seconds) after HTTP 429. We deliberately allow ONE retry only —
 # every retry burns another upstream call on a shared free quota, so we'd rather
@@ -287,3 +291,142 @@ async def analyze_portrait(image: Path | tuple[str, bytes]) -> tuple[dict[str, A
         raise StyleAnalysisError("We couldn't read the portrait clearly. Try a different photo.")
 
     raise StyleAnalysisError("Style analysis is temporarily unavailable. Please try again.")
+
+
+RECOMMEND_SYSTEM = (
+    "You are a fashion stylist. You receive client context (skin_tone and face_shape are authoritative) "
+    "plus numbered garment product images. Each image matches one line in the list (garment_id). "
+    "Rank by: colour harmony with skin_tone, neckline/silhouette vs face_shape, and weather practicality. "
+    "Return ONLY JSON: "
+    '{"selected_garment_id": <int from list>, "reasoning": "<=3 sentences>", "show_recommended": true}'
+)
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    if not text:
+        return None
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start : i + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+async def _fetch_garment_image_data_url(client: httpx.AsyncClient, url: str) -> str | None:
+    from urllib.parse import urlparse
+
+    from .brand_scrape import USER_AGENT
+
+    u = (url or "").strip()
+    if not u.startswith("http"):
+        return None
+    parsed = urlparse(u)
+    referer = f"{parsed.scheme}://{parsed.netloc}/"
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "image/*,*/*;q=0.8",
+        "Referer": referer,
+    }
+    try:
+        r = await client.get(u, headers=headers)
+    except httpx.RequestError:
+        return None
+    if r.status_code != 200:
+        return None
+    return _encode_bytes_to_data_url(r.headers.get("content-type", "image/jpeg"), r.content)
+
+
+async def recommend_catalog_garment(*, session: "UserSession", garments: list["Garment"]) -> dict[str, Any] | None:
+    """Gemma 4 (vision) picks one garment from the filtered catalogue."""
+    if not settings.OPEN_ROUTER_API_KEY:
+        return None
+    model = settings.openrouter_catalog_model
+    if not model:
+        return None
+
+    timeout = httpx.Timeout(max(settings.OPENROUTER_READ_TIMEOUT, 180.0), connect=settings.OPENROUTER_CONNECT_TIMEOUT)
+    headers = {
+        "Authorization": f"Bearer {settings.OPEN_ROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": settings.OPENROUTER_HTTP_REFERER,
+        "X-Title": settings.OPENROUTER_APP_TITLE,
+    }
+
+    async with _recommend_lock, httpx.AsyncClient(timeout=timeout, follow_redirects=True, trust_env=True, http2=False) as client:
+
+        async def load(g):
+            du = await _fetch_garment_image_data_url(client, g.image_url)
+            return (g, du) if du else None
+
+        loaded = [p for p in await asyncio.gather(*(load(g) for g in garments)) if p]
+        if len(loaded) < 2:
+            logger.warning("Recommend: only %d/%d images loaded", len(loaded), len(garments))
+            return None
+
+        lines = [f"{i}. garment_id={g.id}, title={g.title!r}, color={g.color or 'n/a'}" for i, (g, _) in enumerate(loaded, 1)]
+        w = session.weather if isinstance(session.weather, dict) else {}
+        text = (
+            f"Garments (image order = lines 1..{len(lines)}):\n"
+            + "\n".join(lines)
+            + "\n\nClient (use these values):\n"
+            f"skin_tone: {session.skin_tone}\n"
+            f"face_shape: {session.face_shape}\n"
+            f"occasion: {session.occasion.value if session.occasion else 'n/a'}\n"
+            f"event: {session.event.value if session.event else 'n/a'}\n"
+            f"style: {session.style.value if session.style else 'n/a'}\n"
+            f"gender: {session.gender.value if session.gender else 'n/a'}\n"
+            f"city: {session.city or 'n/a'}\n"
+            f"weather: {json.dumps(w, ensure_ascii=False)}\n"
+        )
+        parts: list[dict[str, Any]] = [{"type": "text", "text": text}]
+        for _, du in loaded:
+            parts.append({"type": "image_url", "image_url": {"url": du}})
+
+        try:
+            resp = await client.post(
+                f"{settings.openrouter_url}/chat/completions",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": RECOMMEND_SYSTEM},
+                        {"role": "user", "content": parts},
+                    ],
+                    "temperature": 0.25,
+                    "max_tokens": 700,
+                },
+                headers=headers,
+            )
+        except httpx.RequestError as e:
+            logger.warning("Recommend request failed: %s", e)
+            return None
+
+        if resp.status_code != 200:
+            logger.warning("Recommend HTTP %s: %s", resp.status_code, _openrouter_error_body(resp)[:200])
+            return None
+
+        try:
+            content = resp.json()["choices"][0]["message"]["content"]
+            if isinstance(content, list):
+                content = "".join(p.get("text", "") for p in content if isinstance(p, dict))
+        except (KeyError, IndexError, TypeError, ValueError):
+            content = ""
+
+        if not isinstance(content, str):
+            return None
+        parsed = _extract_json_object(content)
+        if isinstance(parsed, dict):
+            return parsed
+        m = re.search(r'"selected_garment_id"\s*:\s*(\d+)', content)
+        if m:
+            return {"selected_garment_id": int(m.group(1)), "reasoning": "", "show_recommended": True}
+        return None

@@ -13,7 +13,7 @@ function publicAssetUrl(path) {
 export default function ResultStep({ result, garment, onRestart, onPickAnother }) {
   async function fetchTryonBlob() {
     const path = result.tryon_url.startsWith("http") ? result.tryon_url : `${BASE}${result.tryon_url}`;
-    const res = await fetch(path, { headers: { ...authHeaders() } });
+    const res = await fetch(path, { headers: { ...authHeaders() }, cache: "no-store" });
     if (!res.ok) throw new Error("Could not load try-on");
     return res.blob();
   }
@@ -54,6 +54,7 @@ export default function ResultStep({ result, garment, onRestart, onPickAnother }
       <div className="card p-4 lg:col-span-2 bg-hero-radial">
         <div className="rounded-2xl overflow-hidden bg-white border border-ink-100">
           <AuthenticatedImage
+            key={`${result.tryon_url}-${garment.id}`}
             src={result.tryon_url}
             alt="Your virtual try-on"
             className="w-full max-h-[720px] object-contain"
@@ -103,6 +104,7 @@ export default function ResultStep({ result, garment, onRestart, onPickAnother }
             <p className="field-label">Final</p>
             <div className="mt-2 aspect-square rounded-lg overflow-hidden bg-ink-50">
               <AuthenticatedImage
+                key={`thumb-${result.tryon_url}-${garment.id}`}
                 src={result.tryon_url}
                 alt="Final"
                 className="w-full h-full object-cover"

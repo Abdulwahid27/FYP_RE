@@ -70,6 +70,16 @@ class ContextOut(BaseModel):
     weather: Optional[WeatherOut] = None
 
 
+class RecommendIn(BaseModel):
+    session_id: int
+
+
+class RecommendOut(BaseModel):
+    recommended_garment_id: Optional[int] = None
+    reasoning: Optional[str] = None
+    show_recommended: bool = False
+
+
 class TryOnIn(BaseModel):
     session_id: int
     garment_id: int

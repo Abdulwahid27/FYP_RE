@@ -127,6 +127,7 @@ async def tryon(
 
     return TryOnOut(
         session_id=session.id,
-        tryon_url=f"/api/sessions/{session.id}/tryon",
+        # Cache-bust so a second try-on in the same session does not show the previous image.
+        tryon_url=f"/api/sessions/{session.id}/tryon?g={garment.id}",
         garment_extracted_url=f"/api/garments/{garment.id}/extracted",
     )

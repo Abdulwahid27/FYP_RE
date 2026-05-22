@@ -109,6 +109,16 @@ export const api = {
     return asJson(res);
   },
 
+  /** Step 3: Gemma ranks outfits already filtered for this session (step 1 + 2 data in DB). */
+  async recommendGarment(session_id) {
+    const res = await fetch(`${BASE}/api/garments/recommend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ session_id }),
+    });
+    return asJson(res);
+  },
+
   async tryon({ session_id, garment_id }) {
     const res = await fetch(`${BASE}/api/tryon`, {
       method: "POST",

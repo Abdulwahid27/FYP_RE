@@ -20,7 +20,10 @@ def _portrait_url(session: UserSession) -> str | None:
 
 def _tryon_url(session: UserSession) -> str | None:
     if session.tryon_data is not None:
-        return f"/api/sessions/{session.id}/tryon"
+        base = f"/api/sessions/{session.id}/tryon"
+        if session.selected_garment_id is not None:
+            return f"{base}?g={session.selected_garment_id}"
+        return base
     return None
 
 
