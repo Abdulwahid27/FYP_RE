@@ -5,6 +5,7 @@ import ContextStep from "./components/ContextStep.jsx";
 import CatalogStep from "./components/CatalogStep.jsx";
 import TryOnStep from "./components/TryOnStep.jsx";
 import ResultStep from "./components/ResultStep.jsx";
+import MyLooksStep from "./components/MyLooksStep.jsx";
 import AuthStep from "./components/AuthStep.jsx";
 import HomePage from "./components/HomePage.jsx";
 import AboutPage from "./components/AboutPage.jsx";
@@ -27,6 +28,8 @@ export default function App() {
   const [brands, setBrands] = useState([]);
   const [garment, setGarment] = useState(null);
   const [result, setResult] = useState(null);
+  /** studio = fitting flow; history = saved try-ons for this account only */
+  const [appView, setAppView] = useState("studio");
 
   useEffect(() => {
     api.brands().then(setBrands).catch(() => {});
@@ -153,6 +156,20 @@ export default function App() {
                 {userLabel}
               </span>
             )}
+            <button
+              type="button"
+              className={`btn-ghost text-xs ${appView === "studio" ? "ring-1 ring-[#c9a25c]/50" : ""}`}
+              onClick={() => setAppView("studio")}
+            >
+              Studio
+            </button>
+            <button
+              type="button"
+              className={`btn-ghost text-xs ${appView === "history" ? "ring-1 ring-[#c9a25c]/50" : ""}`}
+              onClick={() => setAppView("history")}
+            >
+              My looks
+            </button>
             <button className="btn-ghost text-xs" onClick={reset}>
               New session
             </button>
@@ -164,11 +181,21 @@ export default function App() {
       </header>
 
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
-        <div className="card px-6 py-4">
-          <Stepper current={step} />
-        </div>
+        {appView === "history" ? (
+          <MyLooksStep
+            onBack={() => setAppView("studio")}
+            onNewSession={() => {
+              setAppView("studio");
+              reset();
+            }}
+          />
+        ) : (
+          <>
+            <div className="card px-6 py-4">
+              <Stepper current={step} />
+            </div>
 
-        {step === "upload" && (
+            {step === "upload" && (
           <UploadStep
             onAnalyzed={(a) => {
               setAnalysis(a);
@@ -210,17 +237,20 @@ export default function App() {
           />
         )}
 
-        {step === "result" && result && garment && (
-          <ResultStep
-            result={result}
-            garment={garment}
-            onRestart={reset}
-            onPickAnother={() => {
-              setResult(null);
-              setGarment(null);
-              setStep("catalog");
-            }}
-          />
+            {step === "result" && result && garment && (
+              <ResultStep
+                result={result}
+                garment={garment}
+                onRestart={reset}
+                onPickAnother={() => {
+                  setResult(null);
+                  setGarment(null);
+                  setStep("catalog");
+                }}
+                onViewHistory={() => setAppView("history")}
+              />
+            )}
+          </>
         )}
       </main>
 

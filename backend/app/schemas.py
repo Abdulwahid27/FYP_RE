@@ -105,6 +105,8 @@ class SessionOut(BaseModel):
     event: Optional[EventLiteral] = None
     style: Optional[StyleLiteral] = None
     selected_garment_id: Optional[int] = None
+    garment_title: Optional[str] = None
+    garment_brand: Optional[str] = None
     portrait_url: Optional[str] = None
     tryon_url: Optional[str] = None
 

@@ -10,7 +10,7 @@ function publicAssetUrl(path) {
   return `${BASE}${path}`;
 }
 
-export default function ResultStep({ result, garment, onRestart, onPickAnother }) {
+export default function ResultStep({ result, garment, onRestart, onPickAnother, onViewHistory }) {
   async function fetchTryonBlob() {
     const path = result.tryon_url.startsWith("http") ? result.tryon_url : `${BASE}${result.tryon_url}`;
     const res = await fetch(path, { headers: { ...authHeaders() }, cache: "no-store" });
@@ -120,6 +120,11 @@ export default function ResultStep({ result, garment, onRestart, onPickAnother }
           <button className="btn-primary w-full" onClick={onPickAnother}>
             Try another piece
           </button>
+          {onViewHistory && (
+            <button type="button" className="btn-ghost w-full" onClick={onViewHistory}>
+              View all my looks
+            </button>
+          )}
           <button className="btn-ghost w-full" onClick={onRestart}>
             Start over
           </button>

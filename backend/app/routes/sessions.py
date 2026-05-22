@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 
 from ..database import get_db
 from ..deps import get_current_user
-from ..models import User, UserSession
+from ..models import Garment, User, UserSession
 from ..schemas import SessionOut
 
 
@@ -27,7 +27,10 @@ def _tryon_url(session: UserSession) -> str | None:
     return None
 
 
-def _hydrate(session: UserSession) -> SessionOut:
+def _hydrate(session: UserSession, garment: Garment | None = None) -> SessionOut:
+    brand_name = None
+    if garment and garment.brand:
+        brand_name = garment.brand.name
     return SessionOut(
         id=session.id,
         user_id=session.user_id,
@@ -40,9 +43,26 @@ def _hydrate(session: UserSession) -> SessionOut:
         event=session.event.value if session.event else None,
         style=session.style.value if session.style else None,
         selected_garment_id=session.selected_garment_id,
+        garment_title=garment.title if garment else None,
+        garment_brand=brand_name,
         portrait_url=_portrait_url(session),
         tryon_url=_tryon_url(session),
     )
+
+
+def _garment_map(db: Session, sessions: list[UserSession]) -> dict[int, Garment]:
+    ids = {s.selected_garment_id for s in sessions if s.selected_garment_id is not None}
+    if not ids:
+        return {}
+    rows = (
+        db.execute(
+            select(Garment).options(joinedload(Garment.brand)).where(Garment.id.in_(ids))
+        )
+        .unique()
+        .scalars()
+        .all()
+    )
+    return {g.id: g for g in rows}
 
 
 def _require_session_owner(session: UserSession | None, user: User) -> UserSession:
@@ -65,7 +85,8 @@ def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(ge
         .scalars()
         .all()
     )
-    return [_hydrate(r) for r in rows]
+    garments = _garment_map(db, rows)
+    return [_hydrate(r, garments.get(r.selected_garment_id)) for r in rows]
 
 
 @router.get("/sessions/{session_id}", response_model=SessionOut)
@@ -76,7 +97,19 @@ def get_session(
 ):
     s = db.get(UserSession, session_id)
     _require_session_owner(s, current_user)
-    return _hydrate(s)
+    garment = None
+    if s.selected_garment_id:
+        garment = (
+            db.execute(
+                select(Garment)
+                .options(joinedload(Garment.brand))
+                .where(Garment.id == s.selected_garment_id)
+            )
+            .unique()
+            .scalars()
+            .first()
+        )
+    return _hydrate(s, garment)
 
 
 @router.get("/sessions/{session_id}/portrait")
