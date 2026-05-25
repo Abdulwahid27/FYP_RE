@@ -15,16 +15,6 @@ node_modules/
 dist/
 .vite/
 
-# uploads
-backend/uploads/*
-!backend/uploads/.gitkeep
-backend/uploads/originals/*
-!backend/uploads/originals/.gitkeep
-backend/uploads/garments/*
-!backend/uploads/garments/.gitkeep
-backend/uploads/tryons/*
-!backend/uploads/tryons/.gitkeep
-
 # rembg model cache
 .u2net/
 ~/.u2net/

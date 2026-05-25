@@ -44,6 +44,175 @@ body {
   }
 }
 
+/* Logged-in shell: same dark luxury language as auth (scoped under .luxury-app) */
+.luxury-app .card {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(20, 17, 16, 0.82);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 25px 80px -24px rgba(0, 0, 0, 0.75);
+  color: #e8e2d9;
+}
+
+.luxury-app .btn-ghost {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ebe4d9;
+}
+
+.luxury-app .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.luxury-app .btn-primary {
+  background: linear-gradient(to right, #c9a25c, #9a7628);
+  color: #1a120c;
+  border: none;
+}
+
+.luxury-app .btn-primary:hover {
+  opacity: 0.95;
+}
+
+.luxury-app .btn-accent {
+  background: linear-gradient(to right, #c9a25c, #9a7628);
+  color: #1a120c;
+  border: none;
+}
+
+.luxury-app .btn-accent:hover {
+  opacity: 0.95;
+}
+
+.luxury-app .field-label {
+  color: #a89b8c;
+}
+
+.luxury-app .input {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.28);
+  color: #f3ede3;
+  box-shadow: none;
+}
+
+.luxury-app .input:focus {
+  border-color: rgba(201, 162, 92, 0.55);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(201, 162, 92, 0.22);
+}
+
+/* Native selects: OS defaults often ignore dark cards — align with studio theme */
+.luxury-app select.input {
+  color-scheme: dark;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 2.75rem;
+  padding-right: 2.5rem;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23c9a25c' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 1.15rem;
+}
+
+.luxury-app select.input:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background-color: rgba(0, 0, 0, 0.38);
+}
+
+.luxury-app select.input option {
+  background-color: #141110;
+  color: #f3ede3;
+}
+
+.luxury-app .text-ink-500 {
+  color: #a89b8c;
+}
+
+.luxury-app .text-ink-400 {
+  color: #8a7d72;
+}
+
+.luxury-app .text-ink-700 {
+  color: #ebe4d9;
+}
+
+.luxury-app .text-ink-800 {
+  color: #f0ebe3;
+}
+
+.luxury-app .text-ink-900 {
+  color: #faf6ef;
+}
+
+.luxury-app .bg-ink-50 {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.luxury-app .bg-ink-100 {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.luxury-app .border-ink-100 {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.luxury-app .border-ink-200 {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.luxury-app .border-ink-300 {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.luxury-app .border-dashed.border-ink-300 {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.luxury-app .bg-white\/40 {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.luxury-app .bg-white\/60 {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.luxury-app .bg-white {
+  background-color: rgba(30, 26, 24, 0.95);
+  color: #e8e2d9;
+}
+
+.luxury-app .tryon-frame {
+  background: repeating-conic-gradient(#2a2624 0 25%, #1a1816 0 50%) 50% / 16px 16px;
+}
+
+.luxury-app .bg-ink-900 {
+  background-color: #14110e;
+  color: #faf6ef;
+}
+
+.luxury-app .bg-accent-500 {
+  background-image: linear-gradient(to right, #c9a25c, #9a7628);
+  color: #1a120c;
+}
+
+.luxury-app .bg-accent-500.text-white,
+.luxury-app .bg-accent-500.text-white\/80 {
+  color: #1a120c;
+}
+
+.luxury-app .text-white\/80 {
+  color: rgba(26, 18, 12, 0.75);
+}
+
+.luxury-app .shadow-glow {
+  box-shadow: 0 0 0 3px rgba(201, 162, 92, 0.2);
+}
+
+.luxury-app .shadow-soft {
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+}
+
 .shimmer {
   background: linear-gradient(
     90deg,
@@ -82,4 +251,42 @@ body {
 .tryon-frame {
   background:
     repeating-conic-gradient(#eef0f7 0 25%, #ffffff 0 50%) 50% / 16px 16px;
+}
+
+/* Landing hero: glass panel over full-bleed image */
+.home-hero-bg {
+  animation: homeHeroKen 22s ease-in-out infinite alternate;
+}
+
+@keyframes homeHeroKen {
+  0% {
+    transform: scale(1.05) translate(0, 0);
+  }
+  100% {
+    transform: scale(1.08) translate(-0.5%, -0.5%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-bg {
+    animation: none;
+    transform: scale(1.05);
+  }
+}
+
+.home-glass-panel {
+  border-radius: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(
+    145deg,
+    rgba(28, 24, 22, 0.55) 0%,
+    rgba(18, 16, 14, 0.45) 45%,
+    rgba(22, 19, 17, 0.5) 100%
+  );
+  backdrop-filter: blur(20px) saturate(1.35);
+  -webkit-backdrop-filter: blur(20px) saturate(1.35);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
 }

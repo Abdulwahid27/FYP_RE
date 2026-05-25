@@ -27,3 +27,17 @@ async def extract_garment(source: str | Path, out_path: Path) -> Path:
     out_path = out_path.with_suffix(".png")
     output_image.save(out_path, format="PNG")
     return out_path
+
+
+async def extract_garment_bytes(source: str | Path) -> bytes:
+    """Remove background and return PNG bytes. `source` can be a URL or local path."""
+    if isinstance(source, Path) or (isinstance(source, str) and not source.startswith("http")):
+        data = Path(source).read_bytes()
+    else:
+        data = await _fetch_bytes(source)
+
+    input_image = Image.open(io.BytesIO(data)).convert("RGBA")
+    output_image = remove(input_image)
+    buf = io.BytesIO()
+    output_image.save(buf, format="PNG")
+    return buf.getvalue()

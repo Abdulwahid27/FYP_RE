@@ -77,9 +77,21 @@ export default function UploadStep({ onAnalyzed }) {
         </div>
 
         {error && (
-          <p className="mt-4 text-sm text-accent-700 bg-accent-50 border border-accent-200 rounded-xl px-4 py-2">
-            {error}
-          </p>
+          <div className="mt-4 text-sm text-accent-700 bg-accent-50 border border-accent-200 rounded-xl px-4 py-2 space-y-2">
+            <p>{error}</p>
+            {/OpenRouter|OPENROUTER|vision model|API key|style analysis|temporarily unavailable|could not reach|network|DNS|proxy|timed out|connection failed/i.test(
+              error
+            ) && (
+              <p className="text-xs text-accent-800/90 leading-relaxed">
+                If this mentions the network: ensure this machine can reach{" "}
+                <code className="font-mono text-[11px]">https://openrouter.ai</code> (try in a browser or{" "}
+                <code className="font-mono text-[11px]">curl</code>
+                ). Behind a proxy, set <code className="font-mono text-[11px]">HTTPS_PROXY</code> for the API process.
+                Otherwise confirm <code className="font-mono text-[11px]">OPEN_ROUTER_API_KEY</code> and{" "}
+                <code className="font-mono text-[11px]">OPENROUTER_MODEL</code> in backend <code className="font-mono text-[11px]">.env</code> and restart Uvicorn.
+              </p>
+            )}
+          </div>
         )}
 
         <div className="mt-6 flex gap-3">

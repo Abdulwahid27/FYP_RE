@@ -1,20 +1,35 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
+import AuthenticatedImage from "./AuthenticatedImage.jsx";
 
 const OCCASIONS = [
-  { id: "wedding", label: "Wedding", emoji: "💍" },
-  { id: "casual", label: "Casual", emoji: "☕" },
-  { id: "office", label: "Office", emoji: "💼" },
-  { id: "party", label: "Party", emoji: "✨" },
+  { id: "social", label: "Social", emoji: "💼", help: "Office or hangouts" },
+  { id: "traditional", label: "Traditional", emoji: "🪔", help: "Religious or family gatherings" },
+];
+
+const EVENTS_BY_OCCASION = {
+  social: [
+    { id: "office_wear", label: "Office wear", emoji: "💼" },
+    { id: "hangouts", label: "Hangouts", emoji: "☕" },
+  ],
+  traditional: [
+    { id: "religious", label: "Religious", emoji: "🕌" },
+    { id: "family_gatherings", label: "Family gatherings", emoji: "🎉" },
+  ],
+};
+
+const STYLES = [
+  { id: "eastern", label: "Eastern", emoji: "🪡" },
+  { id: "western", label: "Western", emoji: "👔" },
 ];
 
 export default function ContextStep({ analysis, onContinue, onBack }) {
-  const [gender, setGender] = useState("female");
+  const [gender, setGender] = useState(null);
   const [city, setCity] = useState("");
   const [cities, setCities] = useState([]);
-  const [occasion, setOccasion] = useState("casual");
-  const [brands, setBrands] = useState([]);
-  const [brandId, setBrandId] = useState(null);
+  const [occasion, setOccasion] = useState("social");
+  const [eventId, setEventId] = useState("office_wear");
+  const [style, setStyle] = useState("eastern");
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -22,7 +37,6 @@ export default function ContextStep({ analysis, onContinue, onBack }) {
 
   useEffect(() => {
     api.cities().then(setCities).catch(() => {});
-    api.brands().then(setBrands).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -38,9 +52,26 @@ export default function ContextStep({ analysis, onContinue, onBack }) {
       .finally(() => setWeatherLoading(false));
   }, [city]);
 
+  const events = useMemo(() => EVENTS_BY_OCCASION[occasion] || [], [occasion]);
+
+  // Whenever the occasion changes, snap the event to the first valid one for it.
+  useEffect(() => {
+    if (!events.find((e) => e.id === eventId)) {
+      setEventId(events[0]?.id || null);
+    }
+  }, [events, eventId]);
+
   async function handleContinue() {
+    if (!gender) {
+      setError("Please pick a gender");
+      return;
+    }
     if (!city) {
       setError("Please pick a city");
+      return;
+    }
+    if (!eventId) {
+      setError("Please pick an event");
       return;
     }
     setSubmitting(true);
@@ -51,9 +82,10 @@ export default function ContextStep({ analysis, onContinue, onBack }) {
         gender,
         city,
         occasion,
-        brand_id: brandId || null,
+        event: eventId,
+        style,
       });
-      onContinue({ gender, city, occasion, brandId, weather });
+      onContinue({ gender, city, occasion, event: eventId, style, weather });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -65,7 +97,7 @@ export default function ContextStep({ analysis, onContinue, onBack }) {
     <section className="grid lg:grid-cols-3 gap-8 fade-in">
       <div className="card p-6 lg:col-span-1">
         <p className="field-label">Your portrait</p>
-        <img
+        <AuthenticatedImage
           src={analysis.portrait_url}
           alt="portrait"
           className="mt-3 w-full max-h-[420px] object-contain rounded-2xl shadow-soft bg-ink-50"
@@ -92,17 +124,21 @@ export default function ContextStep({ analysis, onContinue, onBack }) {
                 <button
                   key={g}
                   onClick={() => setGender(g)}
+                  aria-pressed={gender === g}
                   className={[
                     "rounded-xl border px-4 py-3 text-sm font-semibold capitalize transition",
                     gender === g
                       ? "bg-ink-900 text-white border-ink-900 shadow-soft"
-                      : "bg-white text-ink-700 border-ink-200 hover:border-ink-400",
+                      : "bg-white text-ink-500 border-dashed border-ink-300 hover:border-ink-500",
                   ].join(" ")}
                 >
                   {g}
                 </button>
               ))}
             </div>
+            {!gender && (
+              <p className="mt-1 text-xs text-ink-400">Please select one to continue.</p>
+            )}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
@@ -155,52 +191,72 @@ export default function ContextStep({ analysis, onContinue, onBack }) {
 
           <div>
             <label className="field-label">Occasion</label>
-            <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {OCCASIONS.map((o) => (
                 <button
                   key={o.id}
                   onClick={() => setOccasion(o.id)}
                   className={[
-                    "rounded-xl border px-4 py-3 text-sm font-semibold transition flex flex-col items-center gap-1",
+                    "rounded-xl border px-4 py-4 text-left transition",
                     occasion === o.id
                       ? "bg-accent-500 text-white border-accent-500 shadow-glow"
                       : "bg-white text-ink-700 border-ink-200 hover:border-accent-400",
                   ].join(" ")}
                 >
-                  <span className="text-xl">{o.emoji}</span>
-                  {o.label}
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <span className="text-xl">{o.emoji}</span>
+                    {o.label}
+                  </div>
+                  <p
+                    className={[
+                      "text-xs mt-1",
+                      occasion === o.id ? "text-white/80" : "text-ink-500",
+                    ].join(" ")}
+                  >
+                    {o.help}
+                  </p>
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="field-label">Preferred brand (optional)</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                onClick={() => setBrandId(null)}
-                className={[
-                  "chip",
-                  !brandId
-                    ? "border-ink-900 bg-ink-900 text-white"
-                    : "border-ink-200 bg-white text-ink-700 hover:border-ink-400",
-                ].join(" ")}
-              >
-                Any brand
-              </button>
-              {brands.map((b) => (
+            <label className="field-label">Event</label>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              {events.map((ev) => (
                 <button
-                  key={b.id}
-                  onClick={() => setBrandId(b.id)}
+                  key={ev.id}
+                  onClick={() => setEventId(ev.id)}
                   className={[
-                    "chip",
-                    brandId === b.id
-                      ? "border-ink-900 bg-ink-900 text-white"
-                      : "border-ink-200 bg-white text-ink-700 hover:border-ink-400",
+                    "rounded-xl border px-4 py-3 text-sm font-semibold transition flex items-center gap-2 justify-center",
+                    eventId === ev.id
+                      ? "bg-ink-900 text-white border-ink-900 shadow-soft"
+                      : "bg-white text-ink-700 border-ink-200 hover:border-ink-400",
                   ].join(" ")}
-                  title={b.description || b.name}
                 >
-                  {b.name}
+                  <span className="text-xl">{ev.emoji}</span>
+                  {ev.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="field-label">Style</label>
+            <div className="mt-2 grid grid-cols-2 gap-3 max-w-md">
+              {STYLES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setStyle(s.id)}
+                  className={[
+                    "rounded-xl border px-4 py-3 text-sm font-semibold transition flex items-center gap-2 justify-center",
+                    style === s.id
+                      ? "bg-ink-900 text-white border-ink-900 shadow-soft"
+                      : "bg-white text-ink-700 border-ink-200 hover:border-ink-400",
+                  ].join(" ")}
+                >
+                  <span className="text-xl">{s.emoji}</span>
+                  {s.label}
                 </button>
               ))}
             </div>

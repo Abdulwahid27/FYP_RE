@@ -24,7 +24,6 @@ fypv2/
 ├── .env                    # shared API keys & DB URL
 ├── backend/
 │   ├── app/                # FastAPI application
-│   ├── uploads/            # originals / extracted garments / try-ons
 │   └── requirements.txt
 └── frontend/               # Vite + React + Tailwind
 ```
@@ -41,6 +40,8 @@ OPENWEATHER_API_KEY=...
 DATABASE_URL=postgresql://abdul-wahid:fashion@localhost:5432/fashion
 VTON_SPACE=yisol/IDM-VTON
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+# Optional: after each uvicorn restart, the SPA clears the stored JWT (single API instance only).
+BOOT_TOKEN_INVALIDATION=true
 ```
 
 > Note on `OPENROUTER_MODEL`: your prompt mentioned `google/gemma-4`, but
@@ -62,7 +63,10 @@ SQL
 ```
 
 The schema is created automatically on backend boot via SQLAlchemy
-`create_all`.
+`create_all` (same approach for all tables, including `users` and session image
+columns). It does not alter or drop existing columns on already-migrated
+databases; for a clean schema match during development, drop and recreate the
+database (or use a new database name) before starting the API.
 
 ## 3. Backend
 
@@ -93,8 +97,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The Vite dev server proxies `/api` and
-`/uploads` to the backend on port 8000, so there's nothing else to wire up.
+Open http://localhost:5173. The Vite dev server proxies `/api` to the
+backend on port 8000, so there's nothing else to wire up.
 
 ## API surface (all under `/api`)
 
@@ -110,18 +114,18 @@ Open http://localhost:5173. The Vite dev server proxies `/api` and
 | POST   | `/tryon`              | Extract garment background + run virtual try-on             |
 | GET    | `/sessions`           | Recent session history                                      |
 
-Static files (originals, extracted garments, final try-ons) are served at
-`/uploads/...`.
+Portraits, garment cut-outs, and try-on results are stored in PostgreSQL
+(`BYTEA` columns) and exposed as authenticated `/api/...` image routes.
 
 ## Schema
 
 - **brands** — `id, name, slug, description, logo_url, website`
-- **garments** — `id, brand_id, title, gender, occasion, image_url, price, color, extracted_path`
-- **user_sessions** — `id, created_at, portrait_path, skin_tone, face_shape, analysis_raw, gender, city, weather, occasion, brand_id, selected_garment_id, tryon_path`
+- **garments** — `id, brand_id, title, gender, occasion, image_url, price, color, extracted_data`
+- **user_sessions** — `id, created_at, portrait_data, skin_tone, face_shape, analysis_raw, gender, city, weather, occasion, brand_id, selected_garment_id, tryon_data`
 
 ## Workflow
 
-1. **Upload** — Portrait is saved to `backend/uploads/originals/` and sent
+1. **Upload** — Portrait bytes are stored on the session row and sent
    to the configured multimodal model. The model returns
    `{ skin_tone, face_shape }`, which is shown back to the user.
 2. **Context** — Gender, city (Pakistan dropdown), occasion, and (optional)

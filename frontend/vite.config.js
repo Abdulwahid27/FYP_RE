@@ -15,10 +15,6 @@ export default defineConfig({
         changeOrigin: true,
         timeout: 600_000, // long-running /api/tryon (replicate / HF Space)
       },
-      "/uploads": {
-        target: apiOrigin,
-        changeOrigin: true,
-      },
     },
   },
 });

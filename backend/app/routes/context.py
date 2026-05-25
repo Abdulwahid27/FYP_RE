@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import UserSession, Gender, Occasion
+from ..deps import get_current_user
+from ..models import User, UserSession, Gender, Occasion, Event, Style, EVENT_OCCASION
 from ..schemas import ContextIn, ContextOut, WeatherOut, CityOut
 from ..services.weather import get_weather, PAKISTAN_CITIES
 
@@ -24,17 +25,37 @@ async def weather(city: str):
 
 
 @router.post("/context", response_model=ContextOut)
-async def set_context(payload: ContextIn, db: Session = Depends(get_db)):
+async def set_context(
+    payload: ContextIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     session = db.get(UserSession, payload.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed to update this session")
+
+    try:
+        occasion = Occasion(payload.occasion)
+        event = Event(payload.event)
+        style = Style(payload.style)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid occasion, event, or style")
+
+    if EVENT_OCCASION.get(event) is not occasion:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Event '{event.value}' does not belong to occasion '{occasion.value}'.",
+        )
 
     weather_data = await get_weather(payload.city)
 
     session.gender = Gender(payload.gender)
     session.city = payload.city
-    session.occasion = Occasion(payload.occasion)
-    session.brand_id = payload.brand_id
+    session.occasion = occasion
+    session.event = event
+    session.style = style
     session.weather = weather_data
 
     db.commit()
